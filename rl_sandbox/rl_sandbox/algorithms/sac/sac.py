@@ -75,6 +75,7 @@ class SAC:
         state_dict[c.POLICY_OPTIMIZER] = self.policy_opt.state_dict()
         state_dict[c.QS_OPTIMIZER] = self.qs_opt.state_dict()
         state_dict[c.ALPHA_OPTIMIZER] = self.alpha_opt.state_dict()
+        state_dict[c.STEP] = self.step
         if hasattr(self.model, c.OBS_RMS):
             state_dict[c.OBS_RMS] = self.model.obs_rms
         if hasattr(self.model, c.VALUE_RMS):
@@ -86,6 +87,7 @@ class SAC:
         self.policy_opt.load_state_dict(state_dict[c.POLICY_OPTIMIZER])
         self.qs_opt.load_state_dict(state_dict[c.QS_OPTIMIZER])
         self.alpha_opt.load_state_dict(state_dict[c.ALPHA_OPTIMIZER])
+        self.step = state_dict.get(c.STEP, self.step)  # get adds backwards compatibility
         if hasattr(self.model, c.OBS_RMS) and c.OBS_RMS in state_dict:
             self.model.obs_rms = state_dict[c.OBS_RMS]
         if hasattr(self.model, c.VALUE_RMS) and c.VALUE_RMS in state_dict:
@@ -104,6 +106,12 @@ class SAC:
         for (param, target_param) in zip(self.model.soft_update_parameters, self._target_model.soft_update_parameters):
             target_param.data.mul_(1. - self._tau)
             target_param.data.add_(param.data * self._tau)
+
+    def _q_pi(self, obss, h_states):
+        targ_h_states = h_states
+        acts, _ = self.model.act_lprob(obss, h_states)
+        _, q1_vals, q2_vals, _ = self.model.q_vals(obss, targ_h_states, acts)
+        return q1_vals, q2_vals
 
     def _calc_v_next(self, h_states, next_obss, next_h_states, n_obss, n_h_states, n_discounts):
         with torch.no_grad():
